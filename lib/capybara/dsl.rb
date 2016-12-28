@@ -5,7 +5,15 @@ module Capybara
   module DSL
     def self.included(base)
       warn "including Capybara::DSL in the global scope is not recommended!" if base == Object
-      super
+      base.define_singleton_method :include do |*args|
+        args.select { |arg| !include?(arg) }.each do |arg|
+          conflicts = arg.instance_methods & Capybara::Session::DSL_METHODS
+          warn "Capybara::DSL methods #{conflicts} are shadowed by #{arg}. "\
+               "If you expected this please add the method names to Capybara.expected_shadowed_dsl_methods and "\
+               "make sure to always call those methods on a session object." if Capybara::DSL.unexpected_conflicts?(conflicts)
+        end
+        super(*args)
+      end
     end
 
     def self.extended(base)
@@ -51,6 +59,12 @@ module Capybara
       define_method method do |*args, &block|
         page.send method, *args, &block
       end
+    end
+
+  private
+    def self.unexpected_conflicts?(conflicts)
+      return false if Capybara.expected_shadowed_dsl_methods.nil? || conflicts.empty?
+      !(conflicts - Capybara.expected_shadowed_dsl_methods).empty?
     end
   end
 
